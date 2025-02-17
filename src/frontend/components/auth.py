@@ -10,47 +10,99 @@ load_dotenv()
 
 class Authenticator:
     def __init__(self):
-        """Initialize with secrets fallback"""
-        # Try environment variables first, then streamlit secrets
-        self.secret_key = (
-            os.getenv("SECRET_KEY") or 
-            st.secrets.get("SECRET_KEY")
-        )
-        
-        if not self.secret_key:
-            st.error("SECRET_KEY not found. Please set it in environment variables or secrets.")
-            st.stop()
+        """Initialize with better secrets handling"""
+        try:
+            # Try different methods to get the secret key
+            self.secret_key = None
             
-        self.secret_key = self.secret_key.encode()
+            # Method 1: Environment variable
+            if os.getenv("SECRET_KEY"):
+                self.secret_key = os.getenv("SECRET_KEY")
+            
+            # Method 2: Streamlit secrets dict
+            elif hasattr(st, 'secrets') and 'SECRET_KEY' in st.secrets:
+                self.secret_key = st.secrets['SECRET_KEY']
+            
+            # Method 3: Streamlit secrets toml
+            elif hasattr(st, 'secrets') and hasattr(st.secrets, 'SECRET_KEY'):
+                self.secret_key = st.secrets.SECRET_KEY
+                
+            # Method 4: Development fallback (not for production)
+            else:
+                st.warning("Using development SECRET_KEY. Not recommended for production!")
+                self.secret_key = "dev_secret_key_123"  # Development fallback
+            
+            # Encode the secret key
+            self.secret_key = str(self.secret_key).encode()
 
-        # Initialize session state
-        if 'authenticated' not in st.session_state:
-            st.session_state.authenticated = False
-        if 'username' not in st.session_state:
-            st.session_state.username = ""
-        if 'user_role' not in st.session_state:
-            st.session_state.user_role = ""
+            # Initialize session state
+            self._init_session_state()
 
-        # Load superadmin credentials with validation
-        self.superadmin = {
-            "username": (os.getenv("SUPERADMIN_USERNAME") or 
-                       st.secrets.get("SUPERADMIN_USERNAME", "superadmin")).strip(),
-            "password": (os.getenv("SUPERADMIN_PASSWORD") or 
-                       st.secrets.get("SUPERADMIN_PASSWORD", "changeme")).strip(),
+            # Load credentials similarly
+            self.superadmin = self._load_superadmin_credentials()
+            self.regular_credentials = self._load_regular_credentials()
+
+        except Exception as e:
+            st.error(f"Authentication initialization error: {str(e)}")
+            st.stop()
+
+    def _init_session_state(self):
+        """Initialize session state variables"""
+        defaults = {
+            'authenticated': False,
+            'username': "",
+            'user_role': ""
+        }
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+
+    def _load_superadmin_credentials(self):
+        """Load superadmin credentials with fallbacks"""
+        return {
+            "username": (
+                os.getenv("SUPERADMIN_USERNAME") or 
+                getattr(st.secrets, 'SUPERADMIN_USERNAME', None) or
+                st.secrets.get('SUPERADMIN_USERNAME', "superadmin")
+            ).strip(),
+            "password": (
+                os.getenv("SUPERADMIN_PASSWORD") or 
+                getattr(st.secrets, 'SUPERADMIN_PASSWORD', None) or
+                st.secrets.get('SUPERADMIN_PASSWORD', "changeme")
+            ).strip(),
             "role": "superadmin"
         }
-        
-        # Regular users credentials with default values
-        self.regular_credentials = {
-            "admin": {
-                "password": self._hash_password("admin123"),
-                "role": "admin"
-            },
-            "manager": {
-                "password": self._hash_password("manager123"),
-                "role": "manager"
+
+    def _load_regular_credentials(self):
+        """Load regular user credentials with fallbacks"""
+        try:
+            # Try to load from secrets first
+            if hasattr(st, 'secrets') and 'regular_users' in st.secrets:
+                return st.secrets.regular_users
+            
+            # Default credentials if none found in secrets
+            return {
+                "admin": {
+                    "password": self._hash_password("admin123"),
+                    "role": "admin"
+                },
+                "manager": {
+                    "password": self._hash_password("manager123"),
+                    "role": "manager"
+                }
             }
-        }
+        except Exception as e:
+            st.warning(f"Using default credentials for regular users: {str(e)}")
+            return {
+                "admin": {
+                    "password": self._hash_password("admin123"),
+                    "role": "admin"
+                },
+                "manager": {
+                    "password": self._hash_password("manager123"),
+                    "role": "manager"
+                }
+            }
 
     def _hash_password(self, password: str) -> str:
         """Hash password with proper string handling"""

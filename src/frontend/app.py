@@ -24,19 +24,32 @@ class DashboardApp:
 
     def __init__(self):
         """Initialize with improved error handling"""
-        self.auth = Authenticator()
-        self.init_session_state()
-        
-        # Get credentials from either environment or streamlit secrets
-        redmine_url = os.getenv('REDMINE_URL') or st.secrets.get("REDMINE_URL")
-        redmine_api_key = os.getenv('REDMINE_API_KEY') or st.secrets.get("REDMINE_API_KEY")
-        
-        if not redmine_url or not redmine_api_key:
-            st.error("Missing required Redmine credentials. Please check your environment variables or secrets.")
-            st.stop()
+        try:
+            self.auth = Authenticator()
+            self.init_session_state()
             
-        self.client = self.init_redmine_client()
-        self.viz = CostAnalyticsVisualizations()
+            # Try different methods to get Redmine credentials
+            redmine_url = (
+                os.getenv('REDMINE_URL') or 
+                getattr(st.secrets, 'REDMINE_URL', None) or
+                st.secrets.get("REDMINE_URL")
+            )
+            redmine_api_key = (
+                os.getenv('REDMINE_API_KEY') or 
+                getattr(st.secrets, 'REDMINE_API_KEY', None) or
+                st.secrets.get("REDMINE_API_KEY")
+            )
+            
+            if not redmine_url or not redmine_api_key:
+                st.error("Missing Redmine credentials. Check environment variables or secrets.")
+                st.stop()
+                
+            self.client = self.init_redmine_client()
+            self.viz = CostAnalyticsVisualizations()
+
+        except Exception as e:
+            st.error(f"Initialization error: {str(e)}")
+            st.stop()
 
     @staticmethod
     def init_session_state():
