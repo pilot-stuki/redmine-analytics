@@ -10,17 +10,30 @@ load_dotenv()
 
 class Authenticator:
     def __init__(self):
-        # Initialize secret key first
-        self.secret_key = os.getenv("SECRET_KEY", "default_secret_key").encode()
+        """Initialize with proper error handling for environment variables"""
+        # Initialize secret key with default fallback
+        self.secret_key = os.getenv("SECRET_KEY")
+        if not self.secret_key:
+            st.error("SECRET_KEY not found in environment variables. Using default (unsafe).")
+            self.secret_key = "default_secret_key"
+        self.secret_key = self.secret_key.encode()
 
-        # Load superadmin credentials from environment variables
+        # Initialize session state
+        if 'authenticated' not in st.session_state:
+            st.session_state.authenticated = False
+        if 'username' not in st.session_state:
+            st.session_state.username = ""
+        if 'user_role' not in st.session_state:
+            st.session_state.user_role = ""
+
+        # Load superadmin credentials with validation
         self.superadmin = {
-            "username": os.getenv("SUPERADMIN_USERNAME", "superadmin"),
-            "password": os.getenv("SUPERADMIN_PASSWORD", "changeme"),
+            "username": os.getenv("SUPERADMIN_USERNAME", "superadmin").strip(),
+            "password": os.getenv("SUPERADMIN_PASSWORD", "changeme").strip(),
             "role": "superadmin"
         }
         
-        # Regular users credentials (in production, this should be in a database)
+        # Regular users credentials with default values
         self.regular_credentials = {
             "admin": {
                 "password": self._hash_password("admin123"),
@@ -33,25 +46,38 @@ class Authenticator:
         }
 
     def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256"""
+        """Hash password with proper string handling"""
+        if not isinstance(password, str):
+            password = str(password)
         return hashlib.sha256(
             password.encode() + self.secret_key
         ).hexdigest()
 
     def check_password(self, username: str, password: str) -> bool:
-        """Verify password with support for superadmin"""
-        if username == self.superadmin["username"]:
-            return hmac.compare_digest(
-                password.encode(),
-                self.superadmin["password"].encode()
-            )
-        
-        if username in self.regular_credentials:
-            hashed_input = self._hash_password(password)
-            return hmac.compare_digest(
-                hashed_input.encode(),
-                self.regular_credentials[username]["password"].encode()
-            )
+        """Verify password with improved error handling"""
+        if not username or not password:
+            return False
+            
+        username = username.strip()
+        password = password.strip()
+
+        try:
+            if username == self.superadmin["username"]:
+                return hmac.compare_digest(
+                    password.encode(),
+                    self.superadmin["password"].encode()
+                )
+            
+            if username in self.regular_credentials:
+                hashed_input = self._hash_password(password)
+                return hmac.compare_digest(
+                    hashed_input.encode(),
+                    self.regular_credentials[username]["password"].encode()
+                )
+        except Exception as e:
+            st.error(f"Authentication error: {str(e)}")
+            return False
+            
         return False
 
     def get_user_role(self, username: str) -> str:

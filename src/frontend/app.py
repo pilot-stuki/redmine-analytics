@@ -23,35 +23,52 @@ class DashboardApp:
     HOURLY_RATE = 1650  # RUB per hour
 
     def __init__(self):
+        """Initialize with improved error handling"""
         self.auth = Authenticator()
         self.init_session_state()
+        
+        # Validate environment variables
+        redmine_url = os.getenv('REDMINE_URL')
+        redmine_api_key = os.getenv('REDMINE_API_KEY')
+        
+        if not redmine_url or not redmine_api_key:
+            st.error("Missing required environment variables: REDMINE_URL or REDMINE_API_KEY")
+            st.stop()
+            
         self.client = self.init_redmine_client()
         self.viz = CostAnalyticsVisualizations()
 
     @staticmethod
     def init_session_state():
-        """Initialize session state variables with filter persistence"""
-        base = {
+        """Initialize session state with default values"""
+        defaults = {
             'language': 'en',
             'selected_range': 'Last 30 days',
             'start_date': datetime.now().date() - timedelta(days=30),
             'end_date': datetime.now().date(),
             'selected_projects': [],
-            'data_loaded': False
+            'data_loaded': False,
+            'username': "",
+            'user_role': "",
+            'authenticated': False
         }
         
-        # Only initialize if not already in session state
-        for key, value in base.items():
+        for key, default_value in defaults.items():
             if key not in st.session_state:
-                st.session_state[key] = value
+                st.session_state[key] = default_value
 
     @staticmethod
     @st.cache_resource
     def init_redmine_client():
-        return RedmineClient(
-            base_url=os.getenv('REDMINE_URL'),
-            api_key=os.getenv('REDMINE_API_KEY')
-        )
+        """Initialize Redmine client with error handling"""
+        try:
+            return RedmineClient(
+                base_url=os.getenv('REDMINE_URL', '').strip(),
+                api_key=os.getenv('REDMINE_API_KEY', '').strip()
+            )
+        except Exception as e:
+            st.error(f"Failed to initialize Redmine client: {str(e)}")
+            st.stop()
 
     @st.cache_data(ttl=300)
     def load_data(_self, start_date, end_date, project_ids=None):
@@ -311,51 +328,60 @@ class DashboardApp:
             st.dataframe(df, use_container_width=True)
 
     def run(self):
-        """Run the dashboard with localization"""
-        # Handle authentication
-        username = self.auth.login()
-        if not username:
-            return
-
-        # Render language selector first
-        self.render_language_selector()
-        
-        # Add logout button in sidebar
-        with st.sidebar:
-            st.markdown("---")
-            if st.button("Logout"):
-                self.auth.logout()
-                st.rerun()
-
-        # Show localized welcome message
-        role = st.session_state.user_role
-        st.title(get_text('title', st.session_state.language))
-        st.markdown(f"{get_text('welcome', st.session_state.language)} **{username}** ({role})")
-
+        """Run the dashboard with improved error handling"""
         try:
-            filter_result = self.render_sidebar()
-            if filter_result != (None, None, None):
-                start_date, end_date, project_ids = filter_result
-                df = self.load_data(start_date, end_date, project_ids)
-                
-                if not df.empty:
-                    # Show single date range at the top
-                    min_date = df['spent_on'].min()
-                    max_date = df['spent_on'].max()
-                    st.markdown(f"**Date Range**: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+            # Handle authentication
+            username = self.auth.login()
+            if not username:
+                return
+
+            # Get user role safely
+            role = st.session_state.get('user_role', '')
+            
+            # Show localized welcome message
+            st.title(get_text('title', st.session_state.get('language', 'en')))
+            if username and role:
+                st.markdown(f"{get_text('welcome', st.session_state.get('language', 'en'))} **{username}** ({role})")
+
+            # Render language selector first
+            self.render_language_selector()
+            
+            # Add logout button in sidebar
+            with st.sidebar:
+                st.markdown("---")
+                if st.button("Logout"):
+                    self.auth.logout()
+                    st.rerun()
+
+            try:
+                filter_result = self.render_sidebar()
+                if filter_result != (None, None, None):
+                    start_date, end_date, project_ids = filter_result
+                    df = self.load_data(start_date, end_date, project_ids)
                     
-                    self.render_metrics(df)
-                    if self.auth.check_role_access("admin"):
-                        self.render_analysis_tabs(df)
+                    if not df.empty:
+                        # Show single date range at the top
+                        min_date = df['spent_on'].min()
+                        max_date = df['spent_on'].max()
+                        st.markdown(f"**Date Range**: {min_date.strftime('%Y-%m-%d')} to {max_date.strftime('%Y-%m-%d')}")
+                        
+                        self.render_metrics(df)
+                        if self.auth.check_role_access("admin"):
+                            self.render_analysis_tabs(df)
+                        else:
+                            self.render_limited_analysis(df)
                     else:
-                        self.render_limited_analysis(df)
+                        st.info("No data available for the selected filters.")
                 else:
-                    st.info("No data available for the selected filters.")
-            else:
-                st.info("Please select filters and click Apply to view the dashboard.")
+                    st.info("Please select filters and click Apply to view the dashboard.")
+
+            except Exception as e:
+                st.error(f"Error loading data: {str(e)}")
 
         except Exception as e:
-            st.error(f"Error loading data: {str(e)}")
+            st.error(f"Error running dashboard: {str(e)}")
+            if st.session_state.get('authenticated'):
+                self.auth.logout()
 
 if __name__ == "__main__":
     app = DashboardApp()
