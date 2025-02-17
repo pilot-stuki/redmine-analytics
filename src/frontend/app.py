@@ -20,8 +20,8 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.redmine_client import RedmineClient
 from src.data_processor import DataProcessor
 from src.frontend.components.visualizations import CostAnalyticsVisualizations
-from auth import Authenticator
-from localization import get_text, TRANSLATIONS  # Add TRANSLATIONS import
+from src.frontend.components.auth import Authenticator  # Updated import
+from src.frontend.localization import get_text, TRANSLATIONS  # Updated import
 
 # Load environment variables
 load_dotenv()
