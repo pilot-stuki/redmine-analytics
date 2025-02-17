@@ -1,21 +1,22 @@
 import streamlit as st
 import os
+import sys
 from pathlib import Path
 
+# Must be the first Streamlit command
+st.set_page_config(
+    page_title="Redmine Labor Cost Analytics",
+    page_icon="💰",
+    layout="wide"
+)
+
 # Add the current directory to Python path
-import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 try:
     from src.frontend.app import DashboardApp
     
     if __name__ == "__main__":
-        st.set_page_config(
-            page_title="Redmine Labor Cost Analytics",
-            page_icon="💰",
-            layout="wide"
-        )
-        
         app = DashboardApp()
         app.run()
         

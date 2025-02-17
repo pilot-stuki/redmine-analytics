@@ -7,13 +7,6 @@ import sys
 from pathlib import Path
 import io
 
-# Set page config at the very beginning
-st.set_page_config(
-    page_title="Redmine Labor Cost Analytics",
-    page_icon="💰",
-    layout="wide"
-)
-
 # Add the project root to the Python path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
