@@ -12,39 +12,39 @@ class Authenticator:
     def __init__(self):
         """Initialize with better secrets handling"""
         try:
-            # Try different methods to get the secret key
-            self.secret_key = None
-            
-            # Method 1: Environment variable
-            if os.getenv("SECRET_KEY"):
-                self.secret_key = os.getenv("SECRET_KEY")
-            
-            # Method 2: Streamlit secrets dict
-            elif hasattr(st, 'secrets') and 'SECRET_KEY' in st.secrets:
-                self.secret_key = st.secrets['SECRET_KEY']
-            
-            # Method 3: Streamlit secrets toml
-            elif hasattr(st, 'secrets') and hasattr(st.secrets, 'SECRET_KEY'):
-                self.secret_key = st.secrets.SECRET_KEY
+            self.secret_key = self._get_secret('SECRET_KEY')
+            if not self.secret_key:
+                raise ValueError("SECRET_KEY not found in secrets or environment")
                 
-            # Method 4: Development fallback (not for production)
-            else:
-                st.warning("Using development SECRET_KEY. Not recommended for production!")
-                self.secret_key = "dev_secret_key_123"  # Development fallback
-            
             # Encode the secret key
             self.secret_key = str(self.secret_key).encode()
 
             # Initialize session state
             self._init_session_state()
 
-            # Load credentials similarly
+            # Load credentials
             self.superadmin = self._load_superadmin_credentials()
             self.regular_credentials = self._load_regular_credentials()
 
         except Exception as e:
             st.error(f"Authentication initialization error: {str(e)}")
             st.stop()
+
+    def _get_secret(self, key: str, default: str = None) -> str:
+        """Get secret from various sources"""
+        # Try Streamlit secrets first
+        if hasattr(st, 'secrets'):
+            if hasattr(st.secrets, 'secrets') and hasattr(st.secrets.secrets, key):
+                return getattr(st.secrets.secrets, key)
+            if key in st.secrets:
+                return st.secrets[key]
+                
+        # Try environment variables
+        env_value = os.getenv(key)
+        if env_value:
+            return env_value
+            
+        return default
 
     def _init_session_state(self):
         """Initialize session state variables"""

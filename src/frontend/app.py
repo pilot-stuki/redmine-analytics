@@ -23,33 +23,40 @@ class DashboardApp:
     HOURLY_RATE = 1650  # RUB per hour
 
     def __init__(self):
-        """Initialize with improved error handling"""
+        """Initialize with improved secrets handling"""
         try:
             self.auth = Authenticator()
             self.init_session_state()
             
-            # Try different methods to get Redmine credentials
-            redmine_url = (
-                os.getenv('REDMINE_URL') or 
-                getattr(st.secrets, 'REDMINE_URL', None) or
-                st.secrets.get("REDMINE_URL")
-            )
-            redmine_api_key = (
-                os.getenv('REDMINE_API_KEY') or 
-                getattr(st.secrets, 'REDMINE_API_KEY', None) or
-                st.secrets.get("REDMINE_API_KEY")
-            )
+            # Get Redmine credentials
+            redmine_url = self._get_secret('REDMINE_URL')
+            redmine_api_key = self._get_secret('REDMINE_API_KEY')
             
             if not redmine_url or not redmine_api_key:
-                st.error("Missing Redmine credentials. Check environment variables or secrets.")
-                st.stop()
+                raise ValueError("Missing Redmine credentials")
                 
-            self.client = self.init_redmine_client()
+            self.client = self.init_redmine_client(redmine_url, redmine_api_key)
             self.viz = CostAnalyticsVisualizations()
 
         except Exception as e:
             st.error(f"Initialization error: {str(e)}")
             st.stop()
+
+    def _get_secret(self, key: str, default: str = None) -> str:
+        """Get secret from various sources"""
+        # Try Streamlit secrets first
+        if hasattr(st, 'secrets'):
+            if hasattr(st.secrets, 'secrets') and hasattr(st.secrets.secrets, key):
+                return getattr(st.secrets.secrets, key)
+            if key in st.secrets:
+                return st.secrets[key]
+                
+        # Try environment variables
+        env_value = os.getenv(key)
+        if env_value:
+            return env_value
+            
+        return default
 
     @staticmethod
     def init_session_state():
@@ -71,17 +78,12 @@ class DashboardApp:
                 st.session_state[key] = default_value
 
     @staticmethod
-    @st.cache_resource
-    def init_redmine_client():
-        """Initialize Redmine client with secrets fallback"""
-        try:
-            return RedmineClient(
-                base_url=os.getenv('REDMINE_URL', st.secrets.get("REDMINE_URL", "")),
-                api_key=os.getenv('REDMINE_API_KEY', st.secrets.get("REDMINE_API_KEY", ""))
-            )
-        except Exception as e:
-            st.error(f"Failed to initialize Redmine client: {str(e)}")
-            st.stop()
+    def init_redmine_client(url: str, api_key: str):
+        """Initialize Redmine client with provided credentials"""
+        return RedmineClient(
+            base_url=url.strip(),
+            api_key=api_key.strip()
+        )
 
     @st.cache_data(ttl=300)
     def load_data(_self, start_date, end_date, project_ids=None):
