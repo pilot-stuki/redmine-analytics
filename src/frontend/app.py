@@ -27,12 +27,12 @@ class DashboardApp:
         self.auth = Authenticator()
         self.init_session_state()
         
-        # Validate environment variables
-        redmine_url = os.getenv('REDMINE_URL')
-        redmine_api_key = os.getenv('REDMINE_API_KEY')
+        # Get credentials from either environment or streamlit secrets
+        redmine_url = os.getenv('REDMINE_URL') or st.secrets.get("REDMINE_URL")
+        redmine_api_key = os.getenv('REDMINE_API_KEY') or st.secrets.get("REDMINE_API_KEY")
         
         if not redmine_url or not redmine_api_key:
-            st.error("Missing required environment variables: REDMINE_URL or REDMINE_API_KEY")
+            st.error("Missing required Redmine credentials. Please check your environment variables or secrets.")
             st.stop()
             
         self.client = self.init_redmine_client()
@@ -60,11 +60,11 @@ class DashboardApp:
     @staticmethod
     @st.cache_resource
     def init_redmine_client():
-        """Initialize Redmine client with error handling"""
+        """Initialize Redmine client with secrets fallback"""
         try:
             return RedmineClient(
-                base_url=os.getenv('REDMINE_URL', '').strip(),
-                api_key=os.getenv('REDMINE_API_KEY', '').strip()
+                base_url=os.getenv('REDMINE_URL', st.secrets.get("REDMINE_URL", "")),
+                api_key=os.getenv('REDMINE_API_KEY', st.secrets.get("REDMINE_API_KEY", ""))
             )
         except Exception as e:
             st.error(f"Failed to initialize Redmine client: {str(e)}")

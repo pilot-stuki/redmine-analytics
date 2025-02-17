@@ -10,12 +10,17 @@ load_dotenv()
 
 class Authenticator:
     def __init__(self):
-        """Initialize with proper error handling for environment variables"""
-        # Initialize secret key with default fallback
-        self.secret_key = os.getenv("SECRET_KEY")
+        """Initialize with secrets fallback"""
+        # Try environment variables first, then streamlit secrets
+        self.secret_key = (
+            os.getenv("SECRET_KEY") or 
+            st.secrets.get("SECRET_KEY")
+        )
+        
         if not self.secret_key:
-            st.error("SECRET_KEY not found in environment variables. Using default (unsafe).")
-            self.secret_key = "default_secret_key"
+            st.error("SECRET_KEY not found. Please set it in environment variables or secrets.")
+            st.stop()
+            
         self.secret_key = self.secret_key.encode()
 
         # Initialize session state
@@ -28,8 +33,10 @@ class Authenticator:
 
         # Load superadmin credentials with validation
         self.superadmin = {
-            "username": os.getenv("SUPERADMIN_USERNAME", "superadmin").strip(),
-            "password": os.getenv("SUPERADMIN_PASSWORD", "changeme").strip(),
+            "username": (os.getenv("SUPERADMIN_USERNAME") or 
+                       st.secrets.get("SUPERADMIN_USERNAME", "superadmin")).strip(),
+            "password": (os.getenv("SUPERADMIN_PASSWORD") or 
+                       st.secrets.get("SUPERADMIN_PASSWORD", "changeme")).strip(),
             "role": "superadmin"
         }
         
