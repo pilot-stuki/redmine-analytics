@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 import sys
 from pathlib import Path
 
@@ -10,6 +9,11 @@ sys.path.append(str(Path(__file__).parent))
 from src.frontend.app import DashboardApp
 
 if __name__ == "__main__":
-    # Initialize and run the app
+    st.set_page_config(
+        page_title="Redmine Labor Cost Analytics",
+        page_icon="💰",
+        layout="wide"
+    )
+    
     app = DashboardApp()
     app.run()
